@@ -24,7 +24,7 @@ from tkinter import filedialog, messagebox, ttk
 import notify
 import secret
 import tray
-from scan_engine import ScanEngine, list_models, test_api
+from scan_engine import ScanEngine, test_api
 from version import APP_NAME
 from version import __version__ as APP_VERSION
 
@@ -41,13 +41,10 @@ CONFIG_DIR = Path(os.getenv("APPDATA", str(APP_DIR))) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "config.json"
 LOG_FILE = CONFIG_DIR / "scriba.log"
 
-# Liste de depart : remplacee par la liste reelle de l'API au test de la cle.
-MODELS = ["gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.5-flash"]
-
 # Dimensions de la fenetre (journal masque / affiche)
 _WIN_WIDTH = 700
-_COMPACT_HEIGHT = 400
-_EXPANDED_HEIGHT = 670
+_COMPACT_HEIGHT = 365
+_EXPANDED_HEIGHT = 635
 
 
 def _default_watch_dir() -> str:
@@ -66,7 +63,9 @@ def _default_watch_dir() -> str:
 
 
 DEFAULTS = {
-    "model": "gemini-3.1-flash-lite",
+    # Alias toujours a jour : pointe en permanence vers le dernier flash-lite.
+    # Modifiable par un utilisateur avance en editant config.json.
+    "model": "gemini-flash-lite-latest",
     "watch_dir": _default_watch_dir(),
     "dry_run": False,
     "scan_existing": False,
@@ -177,12 +176,13 @@ class ScribaApp:
 
         cfg = load_config()
         self.log_visible = False
+        # Modele : pas de choix dans l'interface, valeur tiree de la config.
+        self.model = cfg["model"] or DEFAULTS["model"]
         root.title(f"{APP_NAME} v{APP_VERSION}  -  renommage automatique de scans")
         root.geometry(f"{_WIN_WIDTH}x{_COMPACT_HEIGHT}")
-        root.minsize(640, 320)
+        root.minsize(640, 300)
 
         self.key_var = tk.StringVar(value=cfg["api_key"])
-        self.model_var = tk.StringVar(value=cfg["model"])
         self.dir_var = tk.StringVar(value=cfg["watch_dir"])
         self.dry_var = tk.BooleanVar(value=cfg["dry_run"])
         self.existing_var = tk.BooleanVar(value=cfg["scan_existing"])
@@ -205,8 +205,6 @@ class ScribaApp:
         self.root.after(150, self._drain_log)
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        if cfg["api_key"]:
-            self._refresh_models_async(cfg["api_key"])
         # Surveillance lancee automatiquement si la cle et le dossier sont prets
         self.root.after(400, self._maybe_autostart)
 
@@ -236,23 +234,17 @@ class ScribaApp:
                   foreground="#888").grid(row=1, column=1, columnspan=2,
                                           sticky="w", padx=8)
 
-        # Modele
-        ttk.Label(frm, text="Modele :").grid(row=2, column=0, sticky="w", **pad)
-        self.model_combo = ttk.Combobox(frm, textvariable=self.model_var,
-                                        values=MODELS)
-        self.model_combo.grid(row=2, column=1, columnspan=2, sticky="ew", **pad)
-
         # Dossier surveille
-        ttk.Label(frm, text="Dossier surveille :").grid(row=3, column=0,
+        ttk.Label(frm, text="Dossier surveille :").grid(row=2, column=0,
                                                         sticky="w", **pad)
         self.dir_entry = ttk.Entry(frm, textvariable=self.dir_var)
-        self.dir_entry.grid(row=3, column=1, sticky="ew", **pad)
+        self.dir_entry.grid(row=2, column=1, sticky="ew", **pad)
         self.browse_btn = ttk.Button(frm, text="Parcourir...", command=self._browse)
-        self.browse_btn.grid(row=3, column=2, sticky="e", **pad)
+        self.browse_btn.grid(row=2, column=2, sticky="e", **pad)
 
         # Options
         opts = ttk.LabelFrame(frm, text="Options", padding=8)
-        opts.grid(row=4, column=0, columnspan=3, sticky="ew", **pad)
+        opts.grid(row=3, column=0, columnspan=3, sticky="ew", **pad)
         opts.columnconfigure(0, weight=1)
         opts.columnconfigure(1, weight=1)
         self.dry_check = ttk.Checkbutton(
@@ -272,7 +264,7 @@ class ScribaApp:
 
         # Bouton demarrer/arreter + statut + acces au journal
         ctrl = ttk.Frame(frm)
-        ctrl.grid(row=5, column=0, columnspan=3, sticky="ew", **pad)
+        ctrl.grid(row=4, column=0, columnspan=3, sticky="ew", **pad)
         self.toggle_btn = ttk.Button(ctrl, text="Demarrer la surveillance",
                                      command=self._toggle)
         self.toggle_btn.pack(side="left")
@@ -286,11 +278,11 @@ class ScribaApp:
 
         # Journal : masque par defaut, affiche via le bouton ci-dessus
         self.log_panel = ttk.Frame(frm)
-        self.log_panel.grid(row=6, column=0, columnspan=3, sticky="nsew",
+        self.log_panel.grid(row=5, column=0, columnspan=3, sticky="nsew",
                             padx=8, pady=(6, 8))
         self.log_panel.columnconfigure(0, weight=1)
         self.log_panel.rowconfigure(1, weight=1)
-        frm.rowconfigure(6, weight=1)
+        frm.rowconfigure(5, weight=1)
         ttk.Label(self.log_panel, text="Journal :").grid(
             row=0, column=0, sticky="w", pady=(0, 2))
         logfrm = ttk.Frame(self.log_panel)
@@ -315,7 +307,7 @@ class ScribaApp:
                   "transmis aux serveurs Google (Gemini) pour analyse. "
                   f"N'utilise {APP_NAME} qu'avec des documents dont le "
                   "traitement par un service tiers est autorise."))
-        rgpd.grid(row=7, column=0, columnspan=3, sticky="ew", padx=8,
+        rgpd.grid(row=6, column=0, columnspan=3, sticky="ew", padx=8,
                   pady=(2, 6))
 
     # ---- actions ----------------------------------------------------------
@@ -384,7 +376,7 @@ class ScribaApp:
     def _current_config(self) -> dict:
         return {
             "api_key": self.key_var.get().strip(),
-            "model": self.model_var.get().strip(),
+            "model": self.model,
             "watch_dir": self.dir_var.get().strip(),
             "dry_run": self.dry_var.get(),
             "scan_existing": self.existing_var.get(),
@@ -393,7 +385,6 @@ class ScribaApp:
 
     def _test_key(self):
         api_key = self.key_var.get().strip()
-        model = self.model_var.get().strip() or DEFAULTS["model"]
         if not api_key:
             messagebox.showwarning(APP_NAME, "Renseigne d'abord ta cle API.")
             return
@@ -402,9 +393,8 @@ class ScribaApp:
 
         def run():
             try:
-                test_api(api_key, model)
+                test_api(api_key, self.model)
                 self._enqueue_log("Cle API valide.", "success")
-                self._refresh_models_async(api_key)
             except Exception as e:
                 self._enqueue_log(f"Cle API invalide : {e}", "error")
             finally:
@@ -412,28 +402,6 @@ class ScribaApp:
                                 lambda: self.test_btn.configure(state="normal"))
 
         threading.Thread(target=run, daemon=True).start()
-
-    def _refresh_models_async(self, api_key: str):
-        """Recupere en arriere-plan la liste a jour des modeles Gemini."""
-        def run():
-            try:
-                models = list_models(api_key)
-            except Exception as e:
-                self._enqueue_log(f"Liste des modeles indisponible : {e}", "warn")
-                return
-            if models:
-                self.root.after(0, lambda: self._set_models(models))
-
-        threading.Thread(target=run, daemon=True).start()
-
-    def _set_models(self, models: list):
-        self.model_combo.configure(values=models)
-        if self.model_var.get() not in models and models:
-            # a defaut du modele courant : le "flash-lite" le plus recent
-            lite = [m for m in models if "flash-lite" in m.lower()]
-            flash = [m for m in models if "flash" in m.lower()]
-            self.model_var.set(sorted(lite or flash or models)[-1])
-        self._enqueue_log(f"{len(models)} modeles Gemini disponibles.", "info")
 
     def _toggle(self):
         if self.engine and self.engine.is_running():
@@ -452,7 +420,7 @@ class ScribaApp:
         save_config(cfg)
 
         self.engine = ScanEngine(
-            cfg["api_key"], cfg["model"] or DEFAULTS["model"], cfg["watch_dir"],
+            cfg["api_key"], cfg["model"], cfg["watch_dir"],
             dry_run=cfg["dry_run"], log=self._enqueue_log,
             on_renamed=self._handle_renamed,
         )
@@ -481,9 +449,8 @@ class ScribaApp:
 
     def _set_running(self, running: bool):
         state = "disabled" if running else "normal"
-        for w in (self.key_entry, self.model_combo, self.dir_entry,
-                  self.browse_btn, self.dry_check, self.existing_check,
-                  self.test_btn):
+        for w in (self.key_entry, self.dir_entry, self.browse_btn,
+                  self.dry_check, self.existing_check, self.test_btn):
             w.configure(state=state)
         if running:
             self.toggle_btn.configure(text="Arreter la surveillance")

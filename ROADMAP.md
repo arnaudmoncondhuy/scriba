@@ -5,9 +5,9 @@ Suivi des évolutions de Scriba. Version courante : voir `version.py`.
 ## v0.5 — actuel
 
 - [x] Surveillance d'un dossier, renommage automatique des scans (PDF + images) via Gemini
-- [x] Interface graphique : clé API, dossier, modèle, options
+- [x] Interface graphique : clé API, dossier, options
 - [x] Clé API chiffrée (Windows DPAPI), configuration mémorisée dans `%APPDATA%`
-- [x] Liste des modèles chargée en direct depuis l'API, restreinte aux `flash` / `flash-lite`
+- [x] Modèle `gemini-flash-lite-latest` (alias toujours à jour) — aucun choix à faire pour l'utilisateur
 - [x] Démarrage automatique de la surveillance à l'ouverture
 - [x] Lancement au démarrage de Windows
 - [x] Notification Windows à chaque renommage

@@ -129,35 +129,6 @@ def test_api(api_key: str, model: str) -> str:
     return (resp.text or "").strip()
 
 
-# Variantes ecartees meme si leur nom contient "flash" : TTS, image, audio.
-_EXCLUDED_MODEL_KEYWORDS = ("tts", "image", "audio", "embedding")
-
-
-def list_models(api_key: str) -> list:
-    """Liste les modeles Gemini utiles a l'analyse de documents.
-
-    Interroge l'API (la liste reste a jour sans modifier le code) et ne garde
-    que les modeles "flash" / "flash-lite" : rapides, economiques et largement
-    suffisants pour proposer un nom de fichier. Les modeles "pro" et les
-    variantes TTS / image / audio sont ecartes.
-    """
-    client = genai.Client(api_key=api_key)
-    names = []
-    for m in client.models.list():
-        actions = (getattr(m, "supported_actions", None)
-                   or getattr(m, "supported_generation_methods", None) or [])
-        if actions and "generateContent" not in actions:
-            continue
-        short = (getattr(m, "name", "") or "").split("/")[-1]
-        low = short.lower()
-        if not short or "flash" not in low:
-            continue
-        if any(kw in low for kw in _EXCLUDED_MODEL_KEYWORDS):
-            continue
-        names.append(short)
-    return sorted(set(names))
-
-
 # --------------------------------------------------------------------------
 # Watcher interne
 # --------------------------------------------------------------------------

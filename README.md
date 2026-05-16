@@ -41,8 +41,8 @@ doc20260510.pdf              →   2026-05-10_ordonnance-dr-martin.pdf
   et tourner en arrière-plan sans fenêtre.
 - 🔐 **Clé API chiffrée** — stockée chiffrée via Windows DPAPI, liée à votre
   session, jamais en clair.
-- 🎯 **Modèles toujours à jour** — la liste des modèles Gemini se rafraîchit
-  seule depuis l'API.
+- 🎯 **Aucun réglage technique** — Scriba utilise `gemini-flash-lite-latest`,
+  l'alias Gemini toujours à jour : rien à choisir, jamais périmé.
 - 💸 **Quasi gratuit** — avec un modèle *flash-lite*, environ **0,0001 $ par
   document** (≈ 7 centimes pour 1000 scans).
 - 📦 **Zéro installation** — un seul `.exe` autonome, aucun Python requis sur

@@ -55,7 +55,7 @@ def main() -> int:
         log.error("GEMINI_API_KEY manquante. Renseigne-la dans le fichier .env.")
         return 1
 
-    model = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite").strip()
+    model = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
     if len(sys.argv) > 1:
         watch_dir = Path(sys.argv[1]).expanduser()
     else:
