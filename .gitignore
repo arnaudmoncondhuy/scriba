@@ -1,0 +1,10 @@
+.env
+*.log
+scans/
+build/
+dist/
+*.spec
+version_info.txt
+icon.ico
+icon_preview.png
+__pycache__/
