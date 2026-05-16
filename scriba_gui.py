@@ -183,7 +183,7 @@ class ScribaApp:
         self.log_queue: "queue.Queue[tuple[str, str]]" = queue.Queue()
 
         cfg = load_config()
-        self.log_visible = False
+        self._panel = None  # panneau bas affiche : None | "log" | "prompt"
         # Modele : pas de choix dans l'interface, valeur tiree de la config.
         self.model = cfg["model"] or DEFAULTS["model"]
         # Override de prompt brut (config.json) : prioritaire sur le preset.
@@ -259,8 +259,9 @@ class ScribaApp:
             frm, textvariable=self.preset_var, state="readonly",
             values=[p["label"] for p in NAMING_PRESETS.values()])
         self.preset_combo.grid(row=2, column=1, sticky="ew", **pad)
+        self.preset_combo.bind("<<ComboboxSelected>>", self._on_preset_changed)
         self.prompt_btn = ttk.Button(frm, text="Voir le prompt",
-                                     command=self._show_prompt)
+                                     command=self._toggle_prompt)
         self.prompt_btn.grid(row=2, column=2, sticky="e", **pad)
 
         # Options
@@ -322,6 +323,25 @@ class ScribaApp:
         self.log_text.tag_config("ts", foreground="#6a9955")
         self.log_panel.grid_remove()
 
+        # Panneau "prompt" : partage la meme zone (ligne 5) que le journal.
+        self.prompt_panel = ttk.Frame(frm)
+        self.prompt_panel.grid(row=5, column=0, columnspan=3, sticky="nsew",
+                               padx=8, pady=(6, 8))
+        self.prompt_panel.columnconfigure(0, weight=1)
+        self.prompt_panel.rowconfigure(1, weight=1)
+        self.prompt_title = ttk.Label(self.prompt_panel, text="Prompt :")
+        self.prompt_title.grid(row=0, column=0, sticky="w", pady=(0, 2))
+        pfrm = ttk.Frame(self.prompt_panel)
+        pfrm.grid(row=1, column=0, sticky="nsew")
+        self.prompt_text = tk.Text(pfrm, height=12, wrap="word", bg="#1e1e1e",
+                                   fg="#dcdcdc", relief="flat",
+                                   font=("Consolas", 9))
+        pscroll = ttk.Scrollbar(pfrm, command=self.prompt_text.yview)
+        self.prompt_text.configure(yscrollcommand=pscroll.set, state="disabled")
+        self.prompt_text.pack(side="left", fill="both", expand=True)
+        pscroll.pack(side="right", fill="y")
+        self.prompt_panel.grid_remove()
+
         # Mention confidentialite / RGPD
         rgpd = ttk.Label(
             frm, foreground="#888", justify="left",
@@ -353,30 +373,22 @@ class ScribaApp:
                  or preset_style(self._selected_preset_key()))
         return build_prompt(style)
 
-    def _show_prompt(self):
-        """Affiche, en lecture seule, le prompt reellement envoye a Gemini."""
-        win = tk.Toplevel(self.root)
-        win.title("Prompt envoyé à Gemini")
-        win.transient(self.root)
-        box = ttk.Frame(win, padding=14)
-        box.pack(fill="both", expand=True)
-
+    def _refresh_prompt_text(self):
+        """Remplit le panneau prompt avec le prompt effectif courant."""
         custom = bool(self.prompt_override.strip())
-        head = ("Prompt personnalisé (clé \"prompt\" de config.json)" if custom
-                else f"Preset : {self.preset_var.get()}")
-        ttk.Label(box, text=head, font=("", 10, "bold")).pack(anchor="w")
-        ttk.Label(box, foreground="#888", justify="left",
-                  text=("Lecture seule. Pour aller plus loin que les presets, "
-                        "ajoute une clé \"prompt\" dans config.json.")).pack(
-            anchor="w", pady=(2, 8))
-        txt = tk.Text(box, width=76, height=18, wrap="word", relief="flat",
-                      bg="#1e1e1e", fg="#dcdcdc", font=("Consolas", 9))
-        txt.insert("1.0", self._effective_prompt())
-        txt.configure(state="disabled")
-        txt.pack(fill="both", expand=True)
-        ttk.Button(box, text="Fermer", command=win.destroy).pack(
-            anchor="e", pady=(8, 0))
-        win.grab_set()
+        self.prompt_title.configure(
+            text=("Prompt — personnalisé (config.json), lecture seule :" if custom
+                  else f"Prompt — preset « {self.preset_var.get()} », "
+                       "lecture seule :"))
+        self.prompt_text.configure(state="normal")
+        self.prompt_text.delete("1.0", "end")
+        self.prompt_text.insert("1.0", self._effective_prompt())
+        self.prompt_text.configure(state="disabled")
+
+    def _on_preset_changed(self, _event=None):
+        """Rafraichit le panneau prompt s'il est ouvert (changement de preset)."""
+        if self._panel == "prompt":
+            self._refresh_prompt_text()
 
     # ---- actions ----------------------------------------------------------
 
@@ -541,17 +553,33 @@ class ScribaApp:
     # ---- journal ----------------------------------------------------------
 
     def _toggle_log(self):
-        if self.log_visible:
-            self.log_panel.grid_remove()
-            self.frm.rowconfigure(5, weight=0)
-            self.log_btn.configure(text="Afficher les journaux")
-            self._fit_window()
-        else:
-            self.frm.rowconfigure(5, weight=1)
+        self._show_panel(None if self._panel == "log" else "log")
+
+    def _toggle_prompt(self):
+        self._show_panel(None if self._panel == "prompt" else "prompt")
+
+    def _show_panel(self, which):
+        """Affiche le panneau bas demande : None | 'log' | 'prompt'.
+
+        Journal et prompt partagent la meme zone (un seul visible a la fois).
+        """
+        self.log_panel.grid_remove()
+        self.prompt_panel.grid_remove()
+        self.frm.rowconfigure(5, weight=1 if which else 0)
+        if which == "log":
             self.log_panel.grid()
-            self.log_btn.configure(text="Masquer les journaux")
+        elif which == "prompt":
+            self._refresh_prompt_text()
+            self.prompt_panel.grid()
+        self._panel = which
+        self.log_btn.configure(text="Masquer les journaux" if which == "log"
+                               else "Afficher les journaux")
+        self.prompt_btn.configure(text="Masquer le prompt" if which == "prompt"
+                                  else "Voir le prompt")
+        if which:
             self.root.geometry(f"{_WIN_WIDTH}x{_EXPANDED_HEIGHT}")
-        self.log_visible = not self.log_visible
+        else:
+            self._fit_window()
 
     def _enqueue_log(self, msg: str, level: str = "info"):
         """Appele depuis n'importe quel thread (moteur inclus)."""
