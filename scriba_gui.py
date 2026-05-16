@@ -41,9 +41,8 @@ CONFIG_DIR = Path(os.getenv("APPDATA", str(APP_DIR))) / APP_NAME
 CONFIG_FILE = CONFIG_DIR / "config.json"
 LOG_FILE = CONFIG_DIR / "scriba.log"
 
-# Dimensions de la fenetre (journal masque / affiche)
+# Largeur fixe ; hauteur ajustee au contenu (journal masque) ou fixe (affiche).
 _WIN_WIDTH = 700
-_COMPACT_HEIGHT = 345
 _EXPANDED_HEIGHT = 615
 
 
@@ -179,8 +178,8 @@ class ScribaApp:
         # Modele : pas de choix dans l'interface, valeur tiree de la config.
         self.model = cfg["model"] or DEFAULTS["model"]
         root.title(f"{APP_NAME} v{APP_VERSION}  -  renommage automatique de scans")
-        root.geometry(f"{_WIN_WIDTH}x{_COMPACT_HEIGHT}")
-        root.minsize(640, 300)
+        root.geometry(f"{_WIN_WIDTH}x320")
+        root.minsize(620, 280)
 
         self.key_var = tk.StringVar(value=cfg["api_key"])
         self.dir_var = tk.StringVar(value=cfg["watch_dir"])
@@ -191,6 +190,7 @@ class ScribaApp:
         self.show_key_var = tk.BooleanVar(value=False)
 
         self._build_ui()
+        self._fit_window()  # hauteur ajustee au contenu (journal masque)
 
         self._tray_hinted = False
         self.tray = tray.TrayIcon(on_show=self._tray_show,
@@ -212,18 +212,19 @@ class ScribaApp:
 
     def _build_ui(self):
         pad = {"padx": 8, "pady": 4}
-        frm = ttk.Frame(self.root, padding=12)
+        self.frm = ttk.Frame(self.root, padding=12)
+        frm = self.frm
         frm.pack(fill="both", expand=True)
         frm.columnconfigure(1, weight=1)
 
         # Cle API
-        ttk.Label(frm, text="Cle API Gemini :").grid(row=0, column=0,
+        ttk.Label(frm, text="Clé API Gemini :").grid(row=0, column=0,
                                                      sticky="w", **pad)
         self.key_entry = ttk.Entry(frm, textvariable=self.key_var, show="•")
         self.key_entry.grid(row=0, column=1, sticky="ew", **pad)
         keybtns = ttk.Frame(frm)
         keybtns.grid(row=0, column=2, sticky="e", **pad)
-        ttk.Button(keybtns, text="Obtenir une cle ?",
+        ttk.Button(keybtns, text="Obtenir une clé ?",
                    command=self._show_key_help).pack(side="left", padx=(0, 6))
         ttk.Checkbutton(keybtns, text="Afficher", variable=self.show_key_var,
                         command=self._toggle_key).pack(side="left")
@@ -231,7 +232,7 @@ class ScribaApp:
         self.test_btn.pack(side="left", padx=(6, 0))
 
         # Dossier surveille
-        ttk.Label(frm, text="Dossier surveille :").grid(row=1, column=0,
+        ttk.Label(frm, text="Dossier surveillé :").grid(row=1, column=0,
                                                         sticky="w", **pad)
         self.dir_entry = ttk.Entry(frm, textvariable=self.dir_var)
         self.dir_entry.grid(row=1, column=1, sticky="ew", **pad)
@@ -247,13 +248,13 @@ class ScribaApp:
             opts, text="Mode test (analyse sans renommer)", variable=self.dry_var)
         self.dry_check.grid(row=0, column=0, sticky="w", pady=2)
         self.existing_check = ttk.Checkbutton(
-            opts, text="Traiter les fichiers deja presents",
+            opts, text="Traiter les fichiers déjà présents",
             variable=self.existing_var)
         self.existing_check.grid(row=0, column=1, sticky="w", pady=2)
-        ttk.Checkbutton(opts, text="Notification Windows a chaque renommage",
+        ttk.Checkbutton(opts, text="Notification Windows à chaque renommage",
                         variable=self.notify_var).grid(row=1, column=0,
                                                        sticky="w", pady=2)
-        ttk.Checkbutton(opts, text="Lancer au demarrage de Windows",
+        ttk.Checkbutton(opts, text="Lancer au démarrage de Windows",
                         variable=self.autostart_var,
                         command=self._toggle_autostart).grid(row=1, column=1,
                                                              sticky="w", pady=2)
@@ -261,10 +262,10 @@ class ScribaApp:
         # Bouton demarrer/arreter + statut + acces au journal
         ctrl = ttk.Frame(frm)
         ctrl.grid(row=3, column=0, columnspan=3, sticky="ew", **pad)
-        self.toggle_btn = ttk.Button(ctrl, text="Demarrer la surveillance",
+        self.toggle_btn = ttk.Button(ctrl, text="Démarrer la surveillance",
                                      command=self._toggle)
         self.toggle_btn.pack(side="left")
-        self.status_var = tk.StringVar(value="●  Arrete")
+        self.status_var = tk.StringVar(value="●  Arrêté")
         self.status_lbl = ttk.Label(ctrl, textvariable=self.status_var,
                                     foreground="#999")
         self.status_lbl.pack(side="left", padx=12)
@@ -272,13 +273,15 @@ class ScribaApp:
                                   command=self._toggle_log)
         self.log_btn.pack(side="right")
 
-        # Journal : masque par defaut, affiche via le bouton ci-dessus
+        # Journal : masque par defaut, affiche via le bouton ci-dessus.
+        # Le poids de la ligne (rowconfigure) n'est mis qu'a l'affichage,
+        # sinon une bande vide s'etire quand le journal est masque.
         self.log_panel = ttk.Frame(frm)
         self.log_panel.grid(row=4, column=0, columnspan=3, sticky="nsew",
                             padx=8, pady=(6, 8))
         self.log_panel.columnconfigure(0, weight=1)
         self.log_panel.rowconfigure(1, weight=1)
-        frm.rowconfigure(4, weight=1)
+        frm.rowconfigure(4, weight=0)
         ttk.Label(self.log_panel, text="Journal :").grid(
             row=0, column=0, sticky="w", pady=(0, 2))
         logfrm = ttk.Frame(self.log_panel)
@@ -299,12 +302,17 @@ class ScribaApp:
         rgpd = ttk.Label(
             frm, foreground="#888", justify="left",
             wraplength=_WIN_WIDTH - 48,
-            text=("Confidentialite (RGPD) : chaque document depose est "
+            text=("Confidentialité (RGPD) : chaque document déposé est "
                   "transmis aux serveurs Google (Gemini) pour analyse. "
                   f"N'utilise {APP_NAME} qu'avec des documents dont le "
-                  "traitement par un service tiers est autorise."))
+                  "traitement par un service tiers est autorisé."))
         rgpd.grid(row=5, column=0, columnspan=3, sticky="ew", padx=8,
                   pady=(2, 6))
+
+    def _fit_window(self):
+        """Ajuste la hauteur de la fenetre au contenu (journal masque)."""
+        self.root.update_idletasks()
+        self.root.geometry(f"{_WIN_WIDTH}x{self.root.winfo_reqheight()}")
 
     # ---- actions ----------------------------------------------------------
 
@@ -312,7 +320,7 @@ class ScribaApp:
         self.key_entry.configure(show="" if self.show_key_var.get() else "•")
 
     def _browse(self):
-        chosen = filedialog.askdirectory(title="Choisir le dossier a surveiller",
+        chosen = filedialog.askdirectory(title="Choisir le dossier à surveiller",
                                          initialdir=self.dir_var.get() or APP_DIR)
         if chosen:
             self.dir_var.set(chosen)
@@ -320,26 +328,26 @@ class ScribaApp:
     def _show_key_help(self):
         """Petit tutoriel : comment obtenir une cle API Gemini."""
         win = tk.Toplevel(self.root)
-        win.title("Obtenir une cle API Gemini")
+        win.title("Obtenir une clé API Gemini")
         win.transient(self.root)
         win.resizable(False, False)
         box = ttk.Frame(win, padding=16)
         box.pack(fill="both", expand=True)
 
-        ttk.Label(box, text="Obtenir une cle API Gemini (gratuit)",
+        ttk.Label(box, text="Obtenir une clé API Gemini (gratuit)",
                   font=("", 11, "bold")).pack(anchor="w", pady=(0, 10))
         steps = (
             '1.  Ouvre Google AI Studio (bouton ci-dessous).\n\n'
             '2.  Connecte-toi avec ton compte Google.\n\n'
-            '3.  Clique sur "Create API key" / "Creer une cle API".\n\n'
-            '4.  Choisis un projet Google Cloud, ou laisse-en creer un.\n\n'
-            "5.  Copie la cle qui s'affiche.\n\n"
+            '3.  Clique sur "Create API key" / "Créer une clé API".\n\n'
+            '4.  Choisis un projet Google Cloud, ou laisse-en créer un.\n\n'
+            "5.  Copie la clé qui s'affiche.\n\n"
             f'6.  Reviens dans {APP_NAME}, colle-la dans le champ\n'
-            '     "Cle API Gemini", puis clique sur "Tester".'
+            '     "Clé API Gemini", puis clique sur "Tester".'
         )
         ttk.Label(box, text=steps, justify="left").pack(anchor="w")
         ttk.Label(box, foreground="#888", wraplength=430, justify="left",
-                  text=("La cle reste gratuite dans le palier gratuit de "
+                  text=("La clé reste gratuite dans le palier gratuit de "
                         f"Gemini. {APP_NAME} la chiffre et la conserve sur ce "
                         "PC uniquement.")).pack(anchor="w", pady=(12, 14))
 
@@ -363,11 +371,11 @@ class ScribaApp:
         if not set_autostart(want):
             self.autostart_var.set(not want)
             messagebox.showerror(APP_NAME,
-                                 "Impossible de modifier le demarrage Windows.")
+                                 "Impossible de modifier le démarrage Windows.")
             return
         self._enqueue_log(
-            "Demarrage avec Windows : active." if want
-            else "Demarrage avec Windows : desactive.", "info")
+            "Démarrage avec Windows : activé." if want
+            else "Démarrage avec Windows : désactivé.", "info")
 
     def _current_config(self) -> dict:
         return {
@@ -382,17 +390,17 @@ class ScribaApp:
     def _test_key(self):
         api_key = self.key_var.get().strip()
         if not api_key:
-            messagebox.showwarning(APP_NAME, "Renseigne d'abord ta cle API.")
+            messagebox.showwarning(APP_NAME, "Renseigne d'abord ta clé API.")
             return
         self.test_btn.configure(state="disabled")
-        self._enqueue_log("Test de la cle API en cours...", "info")
+        self._enqueue_log("Test de la clé API en cours...", "info")
 
         def run():
             try:
                 test_api(api_key, self.model)
-                self._enqueue_log("Cle API valide.", "success")
+                self._enqueue_log("Clé API valide.", "success")
             except Exception as e:
-                self._enqueue_log(f"Cle API invalide : {e}", "error")
+                self._enqueue_log(f"Clé API invalide : {e}", "error")
             finally:
                 self.root.after(0,
                                 lambda: self.test_btn.configure(state="normal"))
@@ -408,10 +416,10 @@ class ScribaApp:
     def _start(self) -> bool:
         cfg = self._current_config()
         if not cfg["api_key"]:
-            messagebox.showwarning(APP_NAME, "Renseigne ta cle API Gemini.")
+            messagebox.showwarning(APP_NAME, "Renseigne ta clé API Gemini.")
             return False
         if not cfg["watch_dir"]:
-            messagebox.showwarning(APP_NAME, "Choisis un dossier a surveiller.")
+            messagebox.showwarning(APP_NAME, "Choisis un dossier à surveiller.")
             return False
         save_config(cfg)
 
@@ -423,7 +431,7 @@ class ScribaApp:
         try:
             self.engine.start()
         except Exception as e:
-            messagebox.showerror(APP_NAME, f"Demarrage impossible :\n{e}")
+            messagebox.showerror(APP_NAME, f"Démarrage impossible :\n{e}")
             self.engine = None
             return False
         if cfg["scan_existing"]:
@@ -449,18 +457,18 @@ class ScribaApp:
                   self.dry_check, self.existing_check, self.test_btn):
             w.configure(state=state)
         if running:
-            self.toggle_btn.configure(text="Arreter la surveillance")
+            self.toggle_btn.configure(text="Arrêter la surveillance")
             self.status_var.set("●  En surveillance")
             self.status_lbl.configure(foreground="#1e8449")
         else:
-            self.toggle_btn.configure(text="Demarrer la surveillance")
-            self.status_var.set("●  Arrete")
+            self.toggle_btn.configure(text="Démarrer la surveillance")
+            self.status_var.set("●  Arrêté")
             self.status_lbl.configure(foreground="#999")
         self.tray.set_running(running)
 
     def _handle_renamed(self, old_name: str, new_name: str, summary: str):
         if self.notify_var.get():
-            notify.notify(f"{APP_NAME} - fichier renomme",
+            notify.notify(f"{APP_NAME} - fichier renommé",
                           f"{old_name}\n->  {new_name}")
 
     # ---- journal ----------------------------------------------------------
@@ -468,9 +476,11 @@ class ScribaApp:
     def _toggle_log(self):
         if self.log_visible:
             self.log_panel.grid_remove()
+            self.frm.rowconfigure(4, weight=0)
             self.log_btn.configure(text="Afficher les journaux")
-            self.root.geometry(f"{_WIN_WIDTH}x{_COMPACT_HEIGHT}")
+            self._fit_window()
         else:
+            self.frm.rowconfigure(4, weight=1)
             self.log_panel.grid()
             self.log_btn.configure(text="Masquer les journaux")
             self.root.geometry(f"{_WIN_WIDTH}x{_EXPANDED_HEIGHT}")
@@ -514,7 +524,7 @@ class ScribaApp:
                 self._tray_hinted = True
                 notify.notify(
                     APP_NAME,
-                    "L'application continue en arriere-plan. Icone en bas a "
+                    "L'application continue en arrière-plan. Icône en bas à "
                     "droite : clic pour rouvrir, clic droit pour quitter.")
         else:
             self._do_quit()

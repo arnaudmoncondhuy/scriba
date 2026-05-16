@@ -203,7 +203,7 @@ class ScanEngine:
                                 recursive=False)
         self._observer.start()
         mode = "  (mode test : aucun renommage)" if self.dry_run else ""
-        self.log(f"Surveillance demarree : {self.watch_dir}{mode}", "success")
+        self.log(f"Surveillance démarrée : {self.watch_dir}{mode}", "success")
 
     def stop(self):
         if not self._running:
@@ -214,7 +214,7 @@ class ScanEngine:
             self._observer.join(timeout=5)
             self._observer = None
         self._queue.put(None)
-        self.log("Surveillance arretee.", "warn")
+        self.log("Surveillance arrêtée.", "warn")
 
     def scan_existing(self):
         """Met en file les fichiers deja presents dans le dossier."""
@@ -223,7 +223,7 @@ class ScanEngine:
         except OSError:
             return
         if files:
-            self.log(f"{len(files)} fichier(s) deja present(s) a traiter.", "info")
+            self.log(f"{len(files)} fichier(s) déjà présent(s) à traiter.", "info")
         for f in files:
             self._enqueue(f)
 
@@ -261,31 +261,31 @@ class ScanEngine:
         if path.suffix.lower() in IGNORE_SUFFIX or path.name.startswith(("~", ".")):
             return
 
-        self.log(f"Detecte : {path.name}", "info")
+        self.log(f"Détecté : {path.name}", "info")
         if not wait_until_stable(path):
-            self.log(f"Fichier instable ou verrouille, ignore : {path.name}", "warn")
+            self.log(f"Fichier instable ou verrouillé, ignoré : {path.name}", "warn")
             return
 
         try:
             result, usage = self._analyze(path)
         except Exception as e:
-            self.log(f"Echec de l'analyse de {path.name} : {e}", "error")
+            self.log(f"Échec de l'analyse de {path.name} : {e}", "error")
             return
 
         self.log(
-            f"Tokens : {usage['in']} entree / {usage['out']} sortie "
+            f"Tokens : {usage['in']} entrée / {usage['out']} sortie "
             f"(total {usage['total']})",
             "info",
         )
 
         base = slugify(result.get("filename", ""))
         if not base:
-            self.log(f"Aucun nom propose pour {path.name}, fichier inchange", "warn")
+            self.log(f"Aucun nom proposé pour {path.name}, fichier inchangé", "warn")
             return
 
         target = unique_path(path.with_name(base + path.suffix.lower()))
         if target == path:
-            self.log(f"Nom deja correct : {path.name}", "info")
+            self.log(f"Nom déjà correct : {path.name}", "info")
             return
 
         summary = result.get("summary", "")

@@ -75,7 +75,7 @@ def main() -> int:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
-        log.info("Arret demande.")
+        log.info("Arrêt demandé.")
     finally:
         engine.stop()
     return 0

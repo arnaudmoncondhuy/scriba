@@ -44,13 +44,13 @@ class TrayIcon:
         if not _AVAILABLE:
             return
         menu = pystray.Menu(
-            pystray.MenuItem("Afficher la fenetre",
+            pystray.MenuItem("Afficher la fenêtre",
                              lambda icon, item: on_show(), default=True),
             pystray.MenuItem(f"Quitter {APP_NAME}",
                              lambda icon, item: on_quit()),
         )
         self._icon = pystray.Icon(APP_NAME, _icon_image(_GREY),
-                                  f"{APP_NAME} - arrete", menu)
+                                  f"{APP_NAME} - arrêté", menu)
 
     def start(self) -> None:
         if self._icon is not None:
@@ -61,7 +61,7 @@ class TrayIcon:
             return
         self._icon.icon = _icon_image(_GREEN if running else _GREY)
         self._icon.title = (f"{APP_NAME} - surveillance active" if running
-                            else f"{APP_NAME} - arrete")
+                            else f"{APP_NAME} - arrêté")
 
     def stop(self) -> None:
         if self._icon is not None:
