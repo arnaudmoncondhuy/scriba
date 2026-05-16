@@ -43,8 +43,8 @@ LOG_FILE = CONFIG_DIR / "scriba.log"
 
 # Dimensions de la fenetre (journal masque / affiche)
 _WIN_WIDTH = 700
-_COMPACT_HEIGHT = 365
-_EXPANDED_HEIGHT = 635
+_COMPACT_HEIGHT = 345
+_EXPANDED_HEIGHT = 615
 
 
 def _default_watch_dir() -> str:
@@ -230,21 +230,17 @@ class ScribaApp:
         self.test_btn = ttk.Button(keybtns, text="Tester", command=self._test_key)
         self.test_btn.pack(side="left", padx=(6, 0))
 
-        ttk.Label(frm, text="Cle chiffree (DPAPI) et liee a ta session Windows.",
-                  foreground="#888").grid(row=1, column=1, columnspan=2,
-                                          sticky="w", padx=8)
-
         # Dossier surveille
-        ttk.Label(frm, text="Dossier surveille :").grid(row=2, column=0,
+        ttk.Label(frm, text="Dossier surveille :").grid(row=1, column=0,
                                                         sticky="w", **pad)
         self.dir_entry = ttk.Entry(frm, textvariable=self.dir_var)
-        self.dir_entry.grid(row=2, column=1, sticky="ew", **pad)
+        self.dir_entry.grid(row=1, column=1, sticky="ew", **pad)
         self.browse_btn = ttk.Button(frm, text="Parcourir...", command=self._browse)
-        self.browse_btn.grid(row=2, column=2, sticky="e", **pad)
+        self.browse_btn.grid(row=1, column=2, sticky="e", **pad)
 
         # Options
         opts = ttk.LabelFrame(frm, text="Options", padding=8)
-        opts.grid(row=3, column=0, columnspan=3, sticky="ew", **pad)
+        opts.grid(row=2, column=0, columnspan=3, sticky="ew", **pad)
         opts.columnconfigure(0, weight=1)
         opts.columnconfigure(1, weight=1)
         self.dry_check = ttk.Checkbutton(
@@ -264,7 +260,7 @@ class ScribaApp:
 
         # Bouton demarrer/arreter + statut + acces au journal
         ctrl = ttk.Frame(frm)
-        ctrl.grid(row=4, column=0, columnspan=3, sticky="ew", **pad)
+        ctrl.grid(row=3, column=0, columnspan=3, sticky="ew", **pad)
         self.toggle_btn = ttk.Button(ctrl, text="Demarrer la surveillance",
                                      command=self._toggle)
         self.toggle_btn.pack(side="left")
@@ -278,11 +274,11 @@ class ScribaApp:
 
         # Journal : masque par defaut, affiche via le bouton ci-dessus
         self.log_panel = ttk.Frame(frm)
-        self.log_panel.grid(row=5, column=0, columnspan=3, sticky="nsew",
+        self.log_panel.grid(row=4, column=0, columnspan=3, sticky="nsew",
                             padx=8, pady=(6, 8))
         self.log_panel.columnconfigure(0, weight=1)
         self.log_panel.rowconfigure(1, weight=1)
-        frm.rowconfigure(5, weight=1)
+        frm.rowconfigure(4, weight=1)
         ttk.Label(self.log_panel, text="Journal :").grid(
             row=0, column=0, sticky="w", pady=(0, 2))
         logfrm = ttk.Frame(self.log_panel)
@@ -307,7 +303,7 @@ class ScribaApp:
                   "transmis aux serveurs Google (Gemini) pour analyse. "
                   f"N'utilise {APP_NAME} qu'avec des documents dont le "
                   "traitement par un service tiers est autorise."))
-        rgpd.grid(row=6, column=0, columnspan=3, sticky="ew", padx=8,
+        rgpd.grid(row=5, column=0, columnspan=3, sticky="ew", padx=8,
                   pady=(2, 6))
 
     # ---- actions ----------------------------------------------------------
