@@ -10,6 +10,7 @@
 ![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011-0078D6?logo=windows&logoColor=white)
 ![Exe autonome](https://img.shields.io/badge/exe-autonome-2ECC71)
 ![Google Gemini](https://img.shields.io/badge/IA-Google%20Gemini-4285F4?logo=googlegemini&logoColor=white)
+![Licence MIT](https://img.shields.io/badge/licence-MIT-F5B301)
 
 Vous scannez un document. Il atterrit dans votre dossier sous un nom du genre
 `scan_20260512_0042.pdf`. Multipliez par cent. Bon courage pour retrouver votre
@@ -117,6 +118,10 @@ en sous-dossiers… → voir **[ROADMAP.md](ROADMAP.md)**.
 - Notification et icône s'affichent sans identité d'application enregistrée
   auprès de Windows.
 
-## 👤 Auteur
+## 👤 Auteur & licence
 
 Développé par **Arnaud Moncond'huy**.
+
+Distribué sous licence **MIT** — voir [LICENSE](LICENSE). Vous pouvez utiliser,
+modifier et redistribuer Scriba librement, y compris pour un usage commercial,
+en conservant la mention de copyright.
