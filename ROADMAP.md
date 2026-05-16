@@ -2,12 +2,14 @@
 
 Suivi des évolutions de Scriba. Version courante : voir `version.py`.
 
-## v0.5 — actuel
+## v0.6 — actuel
 
 - [x] Surveillance d'un dossier, renommage automatique des scans (PDF + images) via Gemini
-- [x] Interface graphique : clé API, dossier, options
+- [x] Interface graphique épurée : clé API, dossier, style de nommage, options
 - [x] Clé API chiffrée (Windows DPAPI), configuration mémorisée dans `%APPDATA%`
-- [x] Modèle `gemini-flash-lite-latest` (alias toujours à jour) — aucun choix à faire pour l'utilisateur
+- [x] Modèle `gemini-flash-lite-latest` (alias toujours à jour) — aucun choix à faire
+- [x] Styles de nommage (presets) + prompt personnalisable via `config.json`
+- [x] Réessais automatiques sur erreur Gemini transitoire (backoff exponentiel)
 - [x] Démarrage automatique de la surveillance à l'ouverture
 - [x] Lancement au démarrage de Windows
 - [x] Notification Windows à chaque renommage
@@ -15,8 +17,8 @@ Suivi des évolutions de Scriba. Version courante : voir `version.py`.
 - [x] Journal repliable, tokens entrée/sortie affichés
 - [x] Tutoriel intégré pour obtenir une clé API
 - [x] Mention RGPD
-- [x] Nom de l'application : Scriba (source unique dans `version.py`)
-- [x] Métadonnées de l'exécutable (version, éditeur, description, copyright)
+- [x] Icône d'application personnalisée + métadonnées de l'exécutable
+- [x] Licence MIT, dépôt GitHub public
 
 ## À venir — court terme
 
@@ -24,12 +26,10 @@ Suivi des évolutions de Scriba. Version courante : voir `version.py`.
       avec détection automatique de la langue de Windows
 - [ ] Estimation du coût par scan dans le journal (table de prix par modèle)
 - [ ] Détection de doublons par contenu (hash), en complément du suffixe `_2`, `_3`
-- [ ] Choix d'une licence et d'un mode de distribution
 
 ## Idées — plus tard
 
 - [ ] Classement automatique en sous-dossiers (par type de document)
-- [ ] Convention de nommage configurable (format de date, ordre des champs)
 - [ ] Support TIFF (conversion automatique avant analyse)
 - [ ] Choix d'autres moteurs IA (OpenAI, modèle local) en plus de Gemini
 - [ ] Historique des renommages + annulation (undo)

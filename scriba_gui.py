@@ -4,6 +4,7 @@ Interface graphique (point d'entree de l'executable).
 Fonctions :
 - saisie de la cle API Gemini et du dossier surveille ;
 - cle API chiffree (Windows DPAPI) et memorisee entre deux sessions ;
+- choix du style de nommage (presets) ;
 - demarrage/arret de la surveillance, journal en direct ;
 - option "lancer au demarrage de Windows" ;
 - notification Windows a chaque renommage.
@@ -24,7 +25,8 @@ from tkinter import filedialog, messagebox, ttk
 import notify
 import secret
 import tray
-from scan_engine import ScanEngine, test_api
+from scan_engine import (DEFAULT_PRESET, NAMING_PRESETS, ScanEngine,
+                         build_prompt, preset_style, test_api)
 from version import APP_NAME
 from version import __version__ as APP_VERSION
 
@@ -43,7 +45,7 @@ LOG_FILE = CONFIG_DIR / "scriba.log"
 
 # Largeur fixe ; hauteur ajustee au contenu (journal masque) ou fixe (affiche).
 _WIN_WIDTH = 700
-_EXPANDED_HEIGHT = 615
+_EXPANDED_HEIGHT = 650
 
 
 def _default_watch_dir() -> str:
@@ -65,6 +67,7 @@ DEFAULTS = {
     # Alias toujours a jour : pointe en permanence vers le dernier flash-lite.
     # Modifiable par un utilisateur avance en editant config.json.
     "model": "gemini-flash-lite-latest",
+    "naming_preset": DEFAULT_PRESET,
     "watch_dir": _default_watch_dir(),
     "dry_run": False,
     "scan_existing": False,
@@ -120,6 +123,7 @@ def set_autostart(enabled: bool) -> bool:
 def load_config() -> dict:
     cfg = dict(DEFAULTS)
     cfg["api_key"] = ""
+    cfg["prompt"] = ""  # override de prompt brut, optionnel (config.json)
     try:
         raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
     except Exception:
@@ -127,6 +131,8 @@ def load_config() -> dict:
     for key in DEFAULTS:
         if key in raw:
             cfg[key] = raw[key]
+    if isinstance(raw.get("prompt"), str):
+        cfg["prompt"] = raw["prompt"]
     enc = raw.get("api_key_enc")
     if enc:
         try:
@@ -148,6 +154,9 @@ def save_config(cfg: dict) -> None:
             # DPAPI indisponible : on ne stocke PAS la cle en clair.
             # Elle sera simplement a ressaisir au prochain lancement.
             pass
+    # Override de prompt : conserve tel quel s'il a ete pose dans config.json.
+    if (cfg.get("prompt") or "").strip():
+        data["prompt"] = cfg["prompt"]
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -177,12 +186,17 @@ class ScribaApp:
         self.log_visible = False
         # Modele : pas de choix dans l'interface, valeur tiree de la config.
         self.model = cfg["model"] or DEFAULTS["model"]
-        root.title(f"{APP_NAME} v{APP_VERSION}  -  renommage automatique de scans")
-        root.geometry(f"{_WIN_WIDTH}x320")
-        root.minsize(620, 280)
+        # Override de prompt brut (config.json) : prioritaire sur le preset.
+        self.prompt_override = cfg["prompt"]
+        root.title(f"{APP_NAME} v{APP_VERSION}  -  Renommage automatique de scans")
+        root.geometry(f"{_WIN_WIDTH}x340")
+        root.minsize(620, 300)
 
         self.key_var = tk.StringVar(value=cfg["api_key"])
         self.dir_var = tk.StringVar(value=cfg["watch_dir"])
+        preset = NAMING_PRESETS.get(cfg["naming_preset"],
+                                    NAMING_PRESETS[DEFAULT_PRESET])
+        self.preset_var = tk.StringVar(value=preset["label"])
         self.dry_var = tk.BooleanVar(value=cfg["dry_run"])
         self.existing_var = tk.BooleanVar(value=cfg["scan_existing"])
         self.notify_var = tk.BooleanVar(value=cfg["notify"])
@@ -239,9 +253,19 @@ class ScribaApp:
         self.browse_btn = ttk.Button(frm, text="Parcourir...", command=self._browse)
         self.browse_btn.grid(row=1, column=2, sticky="e", **pad)
 
+        # Style de nommage
+        ttk.Label(frm, text="Nommage :").grid(row=2, column=0, sticky="w", **pad)
+        self.preset_combo = ttk.Combobox(
+            frm, textvariable=self.preset_var, state="readonly",
+            values=[p["label"] for p in NAMING_PRESETS.values()])
+        self.preset_combo.grid(row=2, column=1, sticky="ew", **pad)
+        self.prompt_btn = ttk.Button(frm, text="Voir le prompt",
+                                     command=self._show_prompt)
+        self.prompt_btn.grid(row=2, column=2, sticky="e", **pad)
+
         # Options
         opts = ttk.LabelFrame(frm, text="Options", padding=8)
-        opts.grid(row=2, column=0, columnspan=3, sticky="ew", **pad)
+        opts.grid(row=3, column=0, columnspan=3, sticky="ew", **pad)
         opts.columnconfigure(0, weight=1)
         opts.columnconfigure(1, weight=1)
         self.dry_check = ttk.Checkbutton(
@@ -261,7 +285,7 @@ class ScribaApp:
 
         # Bouton demarrer/arreter + statut + acces au journal
         ctrl = ttk.Frame(frm)
-        ctrl.grid(row=3, column=0, columnspan=3, sticky="ew", **pad)
+        ctrl.grid(row=4, column=0, columnspan=3, sticky="ew", **pad)
         self.toggle_btn = ttk.Button(ctrl, text="Démarrer la surveillance",
                                      command=self._toggle)
         self.toggle_btn.pack(side="left")
@@ -277,11 +301,11 @@ class ScribaApp:
         # Le poids de la ligne (rowconfigure) n'est mis qu'a l'affichage,
         # sinon une bande vide s'etire quand le journal est masque.
         self.log_panel = ttk.Frame(frm)
-        self.log_panel.grid(row=4, column=0, columnspan=3, sticky="nsew",
+        self.log_panel.grid(row=5, column=0, columnspan=3, sticky="nsew",
                             padx=8, pady=(6, 8))
         self.log_panel.columnconfigure(0, weight=1)
         self.log_panel.rowconfigure(1, weight=1)
-        frm.rowconfigure(4, weight=0)
+        frm.rowconfigure(5, weight=0)
         ttk.Label(self.log_panel, text="Journal :").grid(
             row=0, column=0, sticky="w", pady=(0, 2))
         logfrm = ttk.Frame(self.log_panel)
@@ -306,13 +330,53 @@ class ScribaApp:
                   "transmis aux serveurs Google (Gemini) pour analyse. "
                   f"N'utilise {APP_NAME} qu'avec des documents dont le "
                   "traitement par un service tiers est autorisé."))
-        rgpd.grid(row=5, column=0, columnspan=3, sticky="ew", padx=8,
+        rgpd.grid(row=6, column=0, columnspan=3, sticky="ew", padx=8,
                   pady=(2, 6))
 
     def _fit_window(self):
         """Ajuste la hauteur de la fenetre au contenu (journal masque)."""
         self.root.update_idletasks()
         self.root.geometry(f"{_WIN_WIDTH}x{self.root.winfo_reqheight()}")
+
+    # ---- prompt / nommage -------------------------------------------------
+
+    def _selected_preset_key(self) -> str:
+        label = self.preset_var.get()
+        for key, preset in NAMING_PRESETS.items():
+            if preset["label"] == label:
+                return key
+        return DEFAULT_PRESET
+
+    def _effective_prompt(self) -> str:
+        """Prompt complet : override config.json si present, sinon le preset."""
+        style = (self.prompt_override.strip()
+                 or preset_style(self._selected_preset_key()))
+        return build_prompt(style)
+
+    def _show_prompt(self):
+        """Affiche, en lecture seule, le prompt reellement envoye a Gemini."""
+        win = tk.Toplevel(self.root)
+        win.title("Prompt envoyé à Gemini")
+        win.transient(self.root)
+        box = ttk.Frame(win, padding=14)
+        box.pack(fill="both", expand=True)
+
+        custom = bool(self.prompt_override.strip())
+        head = ("Prompt personnalisé (clé \"prompt\" de config.json)" if custom
+                else f"Preset : {self.preset_var.get()}")
+        ttk.Label(box, text=head, font=("", 10, "bold")).pack(anchor="w")
+        ttk.Label(box, foreground="#888", justify="left",
+                  text=("Lecture seule. Pour aller plus loin que les presets, "
+                        "ajoute une clé \"prompt\" dans config.json.")).pack(
+            anchor="w", pady=(2, 8))
+        txt = tk.Text(box, width=76, height=18, wrap="word", relief="flat",
+                      bg="#1e1e1e", fg="#dcdcdc", font=("Consolas", 9))
+        txt.insert("1.0", self._effective_prompt())
+        txt.configure(state="disabled")
+        txt.pack(fill="both", expand=True)
+        ttk.Button(box, text="Fermer", command=win.destroy).pack(
+            anchor="e", pady=(8, 0))
+        win.grab_set()
 
     # ---- actions ----------------------------------------------------------
 
@@ -381,10 +445,12 @@ class ScribaApp:
         return {
             "api_key": self.key_var.get().strip(),
             "model": self.model,
+            "naming_preset": self._selected_preset_key(),
             "watch_dir": self.dir_var.get().strip(),
             "dry_run": self.dry_var.get(),
             "scan_existing": self.existing_var.get(),
             "notify": self.notify_var.get(),
+            "prompt": self.prompt_override,
         }
 
     def _test_key(self):
@@ -426,7 +492,7 @@ class ScribaApp:
         self.engine = ScanEngine(
             cfg["api_key"], cfg["model"], cfg["watch_dir"],
             dry_run=cfg["dry_run"], log=self._enqueue_log,
-            on_renamed=self._handle_renamed,
+            on_renamed=self._handle_renamed, prompt=self._effective_prompt(),
         )
         try:
             self.engine.start()
@@ -456,6 +522,7 @@ class ScribaApp:
         for w in (self.key_entry, self.dir_entry, self.browse_btn,
                   self.dry_check, self.existing_check, self.test_btn):
             w.configure(state=state)
+        self.preset_combo.configure(state="disabled" if running else "readonly")
         if running:
             self.toggle_btn.configure(text="Arrêter la surveillance")
             self.status_var.set("●  En surveillance")
@@ -476,11 +543,11 @@ class ScribaApp:
     def _toggle_log(self):
         if self.log_visible:
             self.log_panel.grid_remove()
-            self.frm.rowconfigure(4, weight=0)
+            self.frm.rowconfigure(5, weight=0)
             self.log_btn.configure(text="Afficher les journaux")
             self._fit_window()
         else:
-            self.frm.rowconfigure(4, weight=1)
+            self.frm.rowconfigure(5, weight=1)
             self.log_panel.grid()
             self.log_btn.configure(text="Masquer les journaux")
             self.root.geometry(f"{_WIN_WIDTH}x{_EXPANDED_HEIGHT}")

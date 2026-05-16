@@ -14,7 +14,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from scan_engine import ScanEngine
+from scan_engine import DEFAULT_PRESET, ScanEngine, build_prompt, preset_style
 from version import __version__, APP_NAME
 
 if getattr(sys, "frozen", False):
@@ -56,6 +56,7 @@ def main() -> int:
         return 1
 
     model = os.getenv("GEMINI_MODEL", "gemini-flash-lite-latest").strip()
+    preset = os.getenv("NAMING_PRESET", DEFAULT_PRESET).strip() or DEFAULT_PRESET
     if len(sys.argv) > 1:
         watch_dir = Path(sys.argv[1]).expanduser()
     else:
@@ -63,7 +64,8 @@ def main() -> int:
         watch_dir = Path(wd).expanduser() if wd else APP_DIR / "scans"
 
     engine = ScanEngine(api_key, model, watch_dir, dry_run=_flag("DRY_RUN"),
-                        log=engine_log)
+                        log=engine_log,
+                        prompt=build_prompt(preset_style(preset)))
 
     print("=" * 64)
     print(f"  {APP_NAME} v{__version__} - console  (Ctrl+C pour quitter)")

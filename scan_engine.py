@@ -36,22 +36,66 @@ _MAX_ATTEMPTS = 4
 _RETRY_BASE = 2
 _TRANSIENT_CODES = {408, 429, 500, 502, 503, 504}
 
-PROMPT = """\
-Tu es un assistant d'archivage de documents.
-Analyse le document scanne fourni (image ou PDF) et propose un nom de fichier
-clair, descriptif et utile pour le retrouver plus tard, SANS extension.
+# --------------------------------------------------------------------------
+# Prompt : un style de nommage (preset ou personnalise) + un contrat JSON fixe.
+# --------------------------------------------------------------------------
 
-Recommandations :
-- Langue : francais.
-- Identifie le type de document (facture, devis, contrat, courrier, releve,
-  attestation, ticket, bulletin, etc.) et l'emetteur ou l'entite principale.
-- Si une date de document est visible, commence le nom par cette date au
-  format AAAA-MM-JJ.
-- Nom concis (3 a 8 mots), informatif, sans caracteres speciaux.
+# Partie NON editable : garantit une reponse JSON exploitable par le moteur.
+# Toujours ajoutee par build_prompt() -> un style perso ne peut pas la casser.
+_PROMPT_CONTRACT = (
+    "Réponds UNIQUEMENT en JSON valide, sans texte autour, au format exact :\n"
+    '{"filename": "nom-du-fichier-sans-extension", '
+    '"summary": "courte description en une phrase"}'
+)
 
-Reponds UNIQUEMENT en JSON valide, sans texte autour, au format exact :
-{"filename": "nom-du-fichier-sans-extension", "summary": "courte description en une phrase"}
-"""
+_STYLE_HEAD = (
+    "Tu es un assistant d'archivage de documents. Analyse le document scanné "
+    "(image ou PDF) et propose un nom de fichier clair et descriptif, "
+    "SANS extension.\n\n"
+    "- Langue : français.\n"
+    "- Identifie le type de document (facture, devis, contrat, courrier, "
+    "relevé, attestation, ticket...) et l'émetteur ou l'entité principale.\n"
+)
+_STYLE_TAIL = "- Nom concis (3 à 8 mots), sans caractères spéciaux."
+
+# Presets de nommage : chaque entree definit une 'regle' de structure du nom.
+NAMING_PRESETS = {
+    "date_sujet": {
+        "label": "Date + sujet",
+        "rule": ("- Structure : la date du document (AAAA-MM-JJ, si visible), "
+                 "puis le type, puis le sujet. Ex. : 2026-05-12_facture_edf."),
+    },
+    "sujet_date": {
+        "label": "Sujet + date",
+        "rule": ("- Structure : le type puis le sujet, et la date du document "
+                 "(AAAA-MM-JJ, si visible) à la FIN. "
+                 "Ex. : facture_edf_2026-05-12."),
+    },
+    "sujet": {
+        "label": "Sujet seul (sans date)",
+        "rule": ("- Structure : le type de document puis l'émetteur/sujet. "
+                 "N'inclus PAS de date. Ex. : facture_edf."),
+    },
+    "detaille": {
+        "label": "Détaillé",
+        "rule": ("- Structure : la date (AAAA-MM-JJ), le type, l'émetteur et "
+                 "un élément distinctif (objet, période, référence) si "
+                 "pertinent. Ex. : 2026-05-12_facture_edf_electricite_mars."),
+    },
+}
+
+DEFAULT_PRESET = "date_sujet"
+
+
+def preset_style(key: str) -> str:
+    """Texte d'instructions de style d'un preset (sans le contrat JSON)."""
+    preset = NAMING_PRESETS.get(key) or NAMING_PRESETS[DEFAULT_PRESET]
+    return f"{_STYLE_HEAD}{preset['rule']}\n{_STYLE_TAIL}"
+
+
+def build_prompt(style: str) -> str:
+    """Assemble le prompt complet : instructions de style + contrat JSON fixe."""
+    return f"{(style or '').strip()}\n\n{_PROMPT_CONTRACT}"
 
 
 # --------------------------------------------------------------------------
@@ -182,11 +226,13 @@ class ScanEngine:
     """
 
     def __init__(self, api_key, model, watch_dir, dry_run=False, log=None,
-                 on_renamed=None):
+                 on_renamed=None, prompt=None):
         self.api_key = api_key
         self.model = model
         self.watch_dir = Path(watch_dir)
         self.dry_run = dry_run
+        # Prompt complet (style + contrat) ; defaut = preset de base.
+        self.prompt = prompt or build_prompt(preset_style(DEFAULT_PRESET))
         self._log = log or (lambda msg, level="info": None)
         # on_renamed(ancien_nom, nouveau_nom, resume) : appele apres un renommage
         self._on_renamed = on_renamed
@@ -370,7 +416,7 @@ class ScanEngine:
         if size <= INLINE_LIMIT:
             part = types.Part.from_bytes(data=path.read_bytes(), mime_type=mime)
             resp = self._client.models.generate_content(
-                model=self.model, contents=[PROMPT, part], config=config
+                model=self.model, contents=[self.prompt, part], config=config
             )
             return parse_json(resp.text), usage_of(resp)
 
@@ -385,7 +431,7 @@ class ScanEngine:
                 time.sleep(1.0)
                 uploaded = self._client.files.get(name=uploaded.name)
             resp = self._client.models.generate_content(
-                model=self.model, contents=[PROMPT, uploaded], config=config
+                model=self.model, contents=[self.prompt, uploaded], config=config
             )
             return parse_json(resp.text), usage_of(resp)
         finally:

@@ -34,6 +34,9 @@ doc20260510.pdf              →   2026-05-10_ordonnance-dr-martin.pdf
 - 🤖 **Renommage intelligent** — Gemini identifie le type de document
   (facture, contrat, relevé, attestation…), l'émetteur et la date, et propose
   un nom clair, daté et prêt à classer.
+- 🏷️ **Styles de nommage** — choisis la structure des noms (date + sujet,
+  sujet seul, détaillé…) ; personnalisable à fond via la clé `prompt` de
+  `config.json`. Un bouton « Voir le prompt » montre les consignes envoyées à l'IA.
 - 👁️ **Surveillance en continu** — déposez un scan, il est renommé dans la
   foulée. Rien à lancer, rien à cliquer.
 - 🔔 **Notifications Windows** — un toast discret à chaque fichier renommé.

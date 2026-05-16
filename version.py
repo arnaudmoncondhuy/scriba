@@ -4,5 +4,5 @@ Toute autre partie du programme importe __version__ / APP_NAME d'ici ;
 ne jamais les redefinir ailleurs.
 """
 
-__version__ = "0.5"
+__version__ = "0.6"
 APP_NAME = "Scriba"
