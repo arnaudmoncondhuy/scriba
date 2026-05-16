@@ -1,5 +1,5 @@
-google-genai>=1.0.0
-watchdog>=4.0.0
-python-dotenv>=1.0.0
-pystray>=0.19.0
-pillow>=10.0.0
+google-genai==2.3.0
+watchdog==6.0.0
+python-dotenv==1.2.2
+pystray==0.19.5
+pillow==12.2.0

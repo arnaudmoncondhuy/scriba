@@ -147,7 +147,9 @@ def save_config(cfg: dict) -> None:
         try:
             data["api_key_enc"] = secret.protect(api_key)
         except Exception:
-            data["api_key"] = api_key  # repli en clair si DPAPI indisponible
+            # DPAPI indisponible : on ne stocke PAS la cle en clair.
+            # Elle sera simplement a ressaisir au prochain lancement.
+            pass
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         CONFIG_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
