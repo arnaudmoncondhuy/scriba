@@ -31,6 +31,11 @@ MIME = {
 IGNORE_SUFFIX = {".tmp", ".part", ".crdownload"}
 INLINE_LIMIT = 18 * 1024 * 1024  # au-dela : passage par la File API Gemini
 
+# Reessais sur erreur Gemini transitoire (backoff exponentiel : 2, 4, 8 s).
+_MAX_ATTEMPTS = 4
+_RETRY_BASE = 2
+_TRANSIENT_CODES = {408, 429, 500, 502, 503, 504}
+
 PROMPT = """\
 Tu es un assistant d'archivage de documents.
 Analyse le document scanne fourni (image ou PDF) et propose un nom de fichier
@@ -95,6 +100,23 @@ def usage_of(resp) -> dict:
         "out": getattr(u, "candidates_token_count", 0) or 0,
         "total": getattr(u, "total_token_count", 0) or 0,
     }
+
+
+def _is_transient(exc: Exception) -> bool:
+    """Vrai si l'erreur Gemini est transitoire et merite un nouvel essai.
+
+    On reessaie sur les codes HTTP transitoires (429 quota, 5xx surcharge)
+    et sur les erreurs reseau / timeout. Les erreurs permanentes (400 fichier
+    invalide, 403 cle invalide...) echouent immediatement.
+    """
+    code = getattr(exc, "code", None)
+    if isinstance(code, int):
+        return code in _TRANSIENT_CODES
+    # Pas de code HTTP : erreur reseau / timeout probable -> transitoire.
+    blob = (type(exc).__name__ + " " + str(exc)).lower()
+    return any(k in blob for k in (
+        "timeout", "timed out", "connection", "temporarily",
+        "unavailable", "overloaded", "rate limit", "exhausted"))
 
 
 def wait_until_stable(path: Path, timeout: float = 90.0) -> bool:
@@ -312,8 +334,30 @@ class ScanEngine:
             except Exception:
                 pass
 
+    def _sleep(self, seconds: float) -> None:
+        """Pause interruptible : s'ecourte si la surveillance est arretee."""
+        end = time.time() + seconds
+        while time.time() < end and self._running:
+            time.sleep(0.25)
+
     def _analyze(self, path: Path) -> tuple[dict, dict]:
-        """Envoie le scan a Gemini.
+        """Envoie le scan a Gemini, avec reessais sur erreur transitoire."""
+        for attempt in range(1, _MAX_ATTEMPTS + 1):
+            try:
+                return self._analyze_once(path)
+            except Exception as e:
+                if (attempt >= _MAX_ATTEMPTS or not _is_transient(e)
+                        or not self._running):
+                    raise
+                delay = _RETRY_BASE * 2 ** (attempt - 1)
+                self.log(f"Erreur Gemini : {e} — nouvel essai "
+                         f"{attempt + 1}/{_MAX_ATTEMPTS} dans {delay} s.",
+                         "warn")
+                self._sleep(delay)
+        raise RuntimeError("nombre de tentatives epuise")  # inatteignable
+
+    def _analyze_once(self, path: Path) -> tuple[dict, dict]:
+        """Un essai d'analyse Gemini.
 
         Renvoie ({'filename': ..., 'summary': ...}, {'in', 'out', 'total'}).
         """
