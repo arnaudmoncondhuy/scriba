@@ -61,6 +61,26 @@ doc20260510.pdf              →   2026-05-10_ordonnance-dr-martin.pdf
 
 ➡️ Déposez un scan dans le dossier et regardez-le se renommer. ✨
 
+## 🛡️ Premier lancement : l'avertissement Windows
+
+Scriba est un exécutable **gratuit et open-source** ; il n'est pas (encore)
+signé par un certificat payant. Au premier lancement, Windows peut afficher un
+écran bleu **« Windows a protégé votre PC »** (SmartScreen). C'est normal et
+sans danger — le code est entièrement public sur GitHub.
+
+Pour lancer Scriba :
+
+1. Cliquez sur **« Informations complémentaires »**.
+2. Cliquez sur **« Exécuter quand même »**.
+
+Vous n'aurez à le faire **qu'une seule fois**. Si vous avez activé *Smart App
+Control* (Windows 11), il faudra peut-être l'autoriser ou le désactiver.
+
+> 🔏 **Vous construisez depuis les sources ?** Le script `sign_local.ps1` signe
+> Scriba avec un certificat de confiance local : plus aucun avertissement sur
+> votre PC. Détails et options de distribution signée dans
+> **[SIGNING.md](SIGNING.md)**.
+
 ## 🧠 Sous le capot
 
 1. Scriba surveille le dossier et attend que le fichier soit complètement écrit.

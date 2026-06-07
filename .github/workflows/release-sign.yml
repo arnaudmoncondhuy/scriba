@@ -1,0 +1,59 @@
+# Construit Scriba, le fait signer par SignPath, puis l'attache a la release.
+# Pre-requis (voir SIGNING.md) :
+#  - Candidature SignPath Foundation approuvee.
+#  - Secrets GitHub : SIGNPATH_API_TOKEN, SIGNPATH_ORG_ID.
+#  - Remplacer les placeholders <...> ci-dessous par vos slugs SignPath.
+#
+# Declenchement : pousser un tag de version, ex.  git tag v0.6 && git push --tags
+
+name: Release (build + signature)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # pour creer/mettre a jour la release
+
+jobs:
+  build-and-sign:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Installer les dependances
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Construire l'exe (non signe)
+        run: .\build_exe.ps1
+        shell: pwsh
+
+      - name: Publier l'artefact non signe
+        id: upload-unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: scriba-unsigned
+          path: dist/Scriba.exe
+
+      - name: Demander la signature a SignPath
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ secrets.SIGNPATH_ORG_ID }}
+          project-slug: "<PROJECT_SLUG>"
+          signing-policy-slug: "<SIGNING_POLICY_SLUG>"   # ex: release-signing
+          github-artifact-id: ${{ steps.upload-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist-signed
+
+      - name: Attacher l'exe signe a la release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-signed/Scriba.exe
