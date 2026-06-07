@@ -125,6 +125,36 @@ def unique_path(target: Path) -> Path:
         i += 1
 
 
+# Marqueur "deja traite par Scriba" : flux NTFS (Alternate Data Stream) cache.
+# Invisible pour l'utilisateur, quasi gratuit, et il suit le fichier meme s'il
+# est renomme ou deplace sur le meme volume NTFS. Sur un systeme sans ADS
+# (exFAT, lecteur reseau...) l'ecriture echoue silencieusement : le fichier
+# sera simplement re-propose au prochain demarrage, sans planter.
+_DONE_STREAM = "scriba.done"
+
+
+def _stream_path(path: Path) -> str:
+    return f"{path}:{_DONE_STREAM}"
+
+
+def mark_done(path: Path) -> None:
+    """Pose le marqueur 'traite par Scriba'. Sans effet si le FS ignore les ADS."""
+    try:
+        with open(_stream_path(path), "w", encoding="ascii") as fh:
+            fh.write("1")
+    except OSError:
+        pass
+
+
+def is_done(path: Path) -> bool:
+    """Vrai si le fichier porte deja le marqueur Scriba."""
+    try:
+        with open(_stream_path(path), "r", encoding="ascii"):
+            return True
+    except OSError:
+        return False
+
+
 def parse_json(raw: str) -> dict:
     """Parse la reponse du LLM en tolerant d'eventuels blocs ```json."""
     raw = (raw or "").strip()
@@ -285,14 +315,23 @@ class ScanEngine:
         self.log("Surveillance arrêtée.", "warn")
 
     def scan_existing(self):
-        """Met en file les fichiers deja presents dans le dossier."""
+        """Met en file les fichiers presents et non encore traites par Scriba."""
         try:
-            files = sorted(p for p in self.watch_dir.iterdir() if p.is_file())
+            files = sorted(p for p in self.watch_dir.iterdir()
+                           if p.is_file() and p.suffix.lower() in EXTS)
         except OSError:
             return
-        if files:
-            self.log(f"{len(files)} fichier(s) déjà présent(s) à traiter.", "info")
-        for f in files:
+        todo = [f for f in files if not is_done(f)]
+        skipped = len(files) - len(todo)
+        if todo:
+            msg = f"{len(todo)} fichier(s) à traiter."
+            if skipped:
+                msg += f" ({skipped} déjà renommé(s) par Scriba, ignoré(s).)"
+            self.log(msg, "info")
+        elif skipped:
+            self.log(f"Tous les fichiers présents ont déjà été traités "
+                     f"({skipped}), rien à faire.", "info")
+        for f in todo:
             self._enqueue(f)
 
     # ---- interne ----------------------------------------------------------
@@ -324,7 +363,7 @@ class ScanEngine:
                 self._queue.task_done()
 
     def _process(self, path: Path):
-        if path in self._renamed or not path.exists():
+        if path in self._renamed or not path.exists() or is_done(path):
             return
         if path.suffix.lower() in IGNORE_SUFFIX or path.name.startswith(("~", ".")):
             return
@@ -370,6 +409,7 @@ class ScanEngine:
             self._renamed.discard(target)
             self.log(f"Renommage impossible pour {path.name} : {e}", "error")
             return
+        mark_done(target)
         old_name = path.name
         self.log(f"{old_name}  ->  {target.name}", "success")
         if summary:
